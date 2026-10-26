@@ -92,7 +92,7 @@ export function SettingsPanel({ displayName, email, hasPassword, spotify }: Prop
             ? `Signed in as ${email}.`
             : "So you can sign in without Spotify, and disconnect it if you want."}
         </p>
-        <form onSubmit={savePassword} className="grid max-w-md gap-3">
+        <form method="post" onSubmit={savePassword} className="grid max-w-md gap-3">
           {!hasPassword && (
             <input
               name="email"

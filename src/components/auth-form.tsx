@@ -114,7 +114,7 @@ export function AuthForm({
       {mode === "register" && !registrationOpen ? (
         <Notice>Registration with email is closed on this instance.</Notice>
       ) : (
-        <form onSubmit={submit} className="space-y-3">
+        <form method="post" onSubmit={submit} className="space-y-3">
           {mode === "register" && (
             <label className="block">
               <span className="sr-only">Name</span>

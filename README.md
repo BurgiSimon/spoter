@@ -141,15 +141,18 @@ page.
 
 ## Local development
 
-Requirements: Node 22+, pnpm 10, Postgres 14+.
+Requirements: Node 22.12+, pnpm 10 (`corepack enable`), and Docker Desktop for the database (or
+any Postgres 14+).
 
 ```bash
 pnpm install
-cp .env.example .env            # set DATABASE_URL and ENCRYPTION_KEY
-pnpm db:migrate                 # tables + job queue
-pnpm dev                        # web on http://127.0.0.1:3000
-pnpm dev:worker                 # background worker (second terminal)
+pnpm dev:setup      # creates .env, starts Postgres on 127.0.0.1:5433, runs migrations
+pnpm dev:all        # web (http://127.0.0.1:3000) + background worker, with hot reload
+pnpm demo:export    # optional: sample Spotify export to upload on the Import page
 ```
+
+Step-by-step instructions, including setting up the Spotify app and Last.fm key for local use,
+plus troubleshooting, are in **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)**.
 
 | Command                        | What it does                                                                   |
 | ------------------------------ | ------------------------------------------------------------------------------ |

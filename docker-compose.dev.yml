@@ -1,0 +1,22 @@
+# Local development database only. The app itself runs with `pnpm dev:all`.
+#   pnpm dev:db        (or: docker compose -f docker-compose.dev.yml up -d)
+# Port 5433 avoids clashing with a Postgres you may already run on 5432.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: spoter
+      POSTGRES_PASSWORD: spoter
+      POSTGRES_DB: spoter
+    ports:
+      - "127.0.0.1:${SPOTER_DB_PORT:-5433}:5432"
+    volumes:
+      - spoter-dev-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spoter -d spoter"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  spoter-dev-db:

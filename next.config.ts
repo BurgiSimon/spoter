@@ -35,6 +35,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Spotify only accepts loopback redirect URIs as 127.0.0.1, so local dev runs there.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   cacheComponents: true,
   partialPrefetching: true,
   serverExternalPackages: ["@node-rs/argon2", "pg-boss", "pino"],
