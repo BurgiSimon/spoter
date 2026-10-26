@@ -74,7 +74,9 @@ export class JobReporter {
   }
 
   async fail(err: unknown): Promise<void> {
-    const message = err instanceof Error ? err.message : String(err);
+    // Database errors wrap the real cause; show that instead of the whole SQL statement.
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+    const message = cause instanceof Error ? cause.message : String(cause);
     await db()
       .update(schema.userJobs)
       .set({

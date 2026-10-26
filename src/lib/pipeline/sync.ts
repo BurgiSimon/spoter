@@ -153,9 +153,9 @@ export async function syncSpotify(userId: string, report: JobReporter): Promise<
   await db().execute(sql`
     UPDATE user_tracks SET
       top_short = NULL, top_medium = NULL, top_long = NULL,
-      playlist_count = CASE WHEN sources & ${TRACK_SOURCE.PLAYLIST} > 0 THEN 0 ELSE playlist_count END,
-      saved_at = CASE WHEN sources & ${TRACK_SOURCE.EXPORT_LIBRARY} = 0 THEN NULL ELSE saved_at END,
-      sources = sources & ~${TRACK_SOURCE.SAVED | TRACK_SOURCE.PLAYLIST | TRACK_SOURCE.TOP}
+      playlist_count = CASE WHEN sources & ${TRACK_SOURCE.PLAYLIST}::int > 0 THEN 0 ELSE playlist_count END,
+      saved_at = CASE WHEN sources & ${TRACK_SOURCE.EXPORT_LIBRARY}::int = 0 THEN NULL ELSE saved_at END,
+      sources = sources & ~(${TRACK_SOURCE.SAVED | TRACK_SOURCE.PLAYLIST | TRACK_SOURCE.TOP}::int)
     WHERE user_id = ${userId}::uuid
   `);
   await upsertUserTracks(userId, [...patches.values()]);

@@ -3,7 +3,7 @@
  * (CI does); they are skipped otherwise. The database is wiped first.
  */
 import { gzipSync } from "node:zlib";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const url = process.env.TEST_DATABASE_URL;
 const suite = url ? describe : describe.skip;
@@ -19,6 +19,8 @@ suite("database integration", () => {
     ingest: typeof import("@/lib/pipeline/ingest");
     jobs: typeof import("@/lib/pipeline/jobs");
     drizzle: typeof import("drizzle-orm");
+    sync: typeof import("@/lib/pipeline/sync");
+    crypto: typeof import("@/lib/crypto");
   };
   let userId: string;
 
@@ -54,6 +56,8 @@ suite("database integration", () => {
       ingest: await import("@/lib/pipeline/ingest"),
       jobs: await import("@/lib/pipeline/jobs"),
       drizzle: await import("drizzle-orm"),
+      sync: await import("@/lib/pipeline/sync"),
+      crypto: await import("@/lib/crypto"),
     };
     const [user] = await m.db
       .db()
@@ -193,5 +197,151 @@ suite("database integration", () => {
     // Imported twice, counted once.
     expect(fade).toMatchObject({ plays: 2, skips: 0, playlists: 1 });
     expect(glory).toMatchObject({ plays: 0, skips: 1, playlists: 1 });
+  });
+
+  it("syncs a Spotify library end to end (mocked Spotify API)", async () => {
+    const { eq } = m.drizzle;
+    const s = m.db.schema;
+    const [user] = await m.db
+      .db()
+      .insert(s.users)
+      .values({ displayName: "Spotify user" })
+      .returning({ id: s.users.id });
+    const uid = user!.id;
+    await m.db
+      .db()
+      .insert(s.spotifyAccounts)
+      .values({
+        userId: uid,
+        spotifyUserId: "me123",
+        accessTokenEnc: m.crypto.encrypt("access"),
+        refreshTokenEnc: m.crypto.encrypt("refresh"),
+        // Expired: the client must refresh before its first call and persist the new tokens.
+        expiresAt: new Date(Date.now() - 60_000),
+        scope: "user-library-read",
+      });
+
+    const track = (id: string, name: string, artistId: string, artist: string) => ({
+      id,
+      name,
+      uri: `spotify:track:${id}`,
+      duration_ms: 200_000,
+      explicit: false,
+      type: "track",
+      external_ids: { isrc: `ISRC${id}` },
+      artists: [{ id: artistId, name: artist }],
+      album: {
+        name: "Album",
+        images: [{ url: "https://i.scdn.co/image/x", width: 300, height: 300 }],
+        release_date: "1994-01-01",
+      },
+    });
+    const alison = track("1111111111111111111111", "Alison", "a1", "Slowdive");
+    const glory = track("2222222222222222222222", "Glory Box", "a2", "Portishead");
+    const page = <T>(items: T[]) => ({
+      items,
+      next: null,
+      total: items.length,
+      limit: 50,
+      offset: 0,
+    });
+    const routes: [RegExp, unknown][] = [
+      [
+        /^\/api\/token$/,
+        {
+          access_token: "fresh-access",
+          token_type: "Bearer",
+          scope: "user-library-read",
+          expires_in: 3600,
+          refresh_token: "rotated-refresh",
+        },
+      ],
+      [/\/v1\/me$/, { id: "me123", display_name: "Simon" }],
+      [/\/v1\/me\/tracks/, page([{ added_at: "2025-01-01T00:00:00Z", track: alison }])],
+      [
+        /\/v1\/me\/playlists/,
+        page([
+          { id: "pl1", name: "Mine", owner: { id: "me123" }, collaborative: false },
+          { id: "pl2", name: "Not mine", owner: { id: "other" }, collaborative: false },
+        ]),
+      ],
+      [
+        /\/v1\/playlists\/pl1\/items/,
+        page([
+          { added_at: "2025-01-02T00:00:00Z", item: alison },
+          { added_at: "2025-01-02T00:00:00Z", item: glory },
+        ]),
+      ],
+      [/\/v1\/me\/top\/tracks/, page([glory, alison])],
+      [
+        /\/v1\/me\/top\/artists/,
+        page([{ id: "a1", name: "Slowdive", genres: ["shoegaze", "dream pop"], images: [] }]),
+      ],
+      [
+        /\/v1\/me\/following/,
+        {
+          artists: { items: [{ id: "a2", name: "Portishead", genres: ["trip hop"] }], next: null },
+        },
+      ],
+      [
+        /\/v1\/me\/player\/recently-played/,
+        { items: [{ played_at: "2025-02-01T10:00:00Z", track: glory }], next: null },
+      ],
+    ];
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      const path = new URL(url).pathname;
+      const hit = routes.find(([re]) => re.test(path));
+      if (!hit) return new Response(JSON.stringify({ error: "unmocked " + url }), { status: 404 });
+      return new Response(JSON.stringify(hit[1]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const jobId = await m.jobs.createJob(uid, "pipeline");
+      // Run twice: the second run exercises the "reset, then re-apply" path on existing rows.
+      await m.sync.syncSpotify(uid, new m.jobs.JobReporter(jobId));
+      await m.sync.syncSpotify(uid, new m.jobs.JobReporter(jobId));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    const rows = await m.db
+      .db()
+      .select({ spotifyId: s.tracks.spotifyId, ut: s.userTracks })
+      .from(s.userTracks)
+      .innerJoin(s.tracks, eq(s.tracks.id, s.userTracks.trackId))
+      .where(eq(s.userTracks.userId, uid));
+    // Matched to existing catalog rows (an earlier test created "Alison - Remastered 2005").
+    const a = rows.find((r) => r.spotifyId === alison.id)!.ut;
+    const g = rows.find((r) => r.spotifyId === glory.id)!.ut;
+    expect(rows).toHaveLength(2);
+    expect(a.savedAt).not.toBeNull();
+    expect(a.sources & 1).toBe(1); // saved
+    expect(a.playlistCount).toBe(1);
+    expect(g.playlistCount).toBe(1);
+    expect(g.topShort).toBe(1);
+    expect(a.topShort).toBe(2);
+    expect(g.playCount).toBe(1); // recently played became history
+    const artists = await m.db
+      .db()
+      .select()
+      .from(s.userArtists)
+      .where(eq(s.userArtists.userId, uid));
+    expect(artists.find((x) => x.topShort === 1)).toBeTruthy();
+    expect(artists.some((x) => x.followed)).toBe(true);
+    const [account] = await m.db
+      .db()
+      .select()
+      .from(s.spotifyAccounts)
+      .where(eq(s.spotifyAccounts.userId, uid));
+    expect(account!.lastSyncAt).not.toBeNull();
+    expect(m.crypto.decrypt(account!.accessTokenEnc)).toBe("fresh-access");
+    expect(m.crypto.decrypt(account!.refreshTokenEnc)).toBe("rotated-refresh");
+    expect(account!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    // The unowned playlist was never read.
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes("/playlists/pl2/"))).toBe(false);
   });
 });
