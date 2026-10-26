@@ -1,0 +1,56 @@
+# Production-style stack: Postgres + migrations + web + worker.
+#   cp .env.example .env   # fill in the values
+#   docker compose up -d --build
+# Put a TLS-terminating reverse proxy (Caddy, Traefik, nginx) in front of port 3000.
+
+x-app: &app
+  image: spoter:latest
+  build: .
+  env_file: .env
+  environment:
+    DATABASE_URL: postgres://spoter:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/spoter
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: spoter
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: spoter
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spoter -d spoter"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["node", "dist/migrate.mjs"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    <<: *app
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["node", "dist/worker.mjs"]
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
