@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0b10;
+  --color-surface: #15151d;
+  --color-surface-2: #1d1d28;
+  --color-surface-3: #262634;
+  --color-line: #2b2b3a;
+  --color-ink: #f4f4f7;
+  --color-ink-2: #c4c4d2;
+  --color-muted: #8d8da3;
+  --color-brand: #1ed760;
+  --color-brand-2: #ff4d8d;
+  --color-like: #1ed760;
+  --color-nope: #ff5470;
+  --color-super: #4dabff;
+  /* Chart tokens (validated against the surface with the dataviz checks) */
+  --color-viz-1: #18a84a;
+  --color-viz-pos: #3987e5;
+  --color-viz-neg: #e66767;
+  --color-viz-mid: #383835;
+  --color-viz-grid: #2c2c2a;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius-card: 1.5rem;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.text-gradient {
+  background: linear-gradient(100deg, var(--color-brand), var(--color-brand-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bg-brand-gradient {
+  background: linear-gradient(120deg, var(--color-brand), #19b3a6 45%, var(--color-brand-2));
+}
+
+.glow {
+  box-shadow:
+    0 30px 80px -20px rgb(30 215 96 / 0.25),
+    0 20px 60px -30px rgb(255 77 141 / 0.35);
+}
+
+@utility focus-ring {
+  outline: 2px solid transparent;
+  &:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
+
+input[type="range"] {
+  accent-color: var(--color-brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

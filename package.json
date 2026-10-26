@@ -1,0 +1,63 @@
+{
+  "name": "spoter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spoter: swipe, duel and rank songs to teach a recommendation engine your music taste. Spotify + Tinder.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "dev": "next dev",
+    "dev:worker": "tsx watch --env-file-if-exists=.env src/worker/index.ts",
+    "build": "next build && pnpm build:worker",
+    "build:worker": "node scripts/build-worker.mjs",
+    "start": "next start",
+    "start:worker": "node dist/worker.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@node-rs/argon2": "2.2.2",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "0.45.4",
+    "fflate": "0.8.3",
+    "lucide-react": "1.61.0",
+    "motion": "14.6.0",
+    "next": "16.4.3",
+    "pg": "8.23.1",
+    "pg-boss": "12.38.0",
+    "pino": "10.4.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "server-only": "^0.0.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "drizzle-kit": "0.31.11",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.4.3",
+    "pino-pretty": "^13.2.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}
