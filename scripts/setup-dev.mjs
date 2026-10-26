@@ -7,6 +7,8 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import pg from "pg";
 
 const DEV_DATABASE_URL = "postgres://spoter:spoter@127.0.0.1:5433/spoter";
+// Placeholder values shipped in earlier versions of .env.example: not a database anyone set up.
+const TEMPLATE_DATABASE_URLS = ["postgres://spoter:change-me@127.0.0.1:5432/spoter"];
 const isWindows = process.platform === "win32";
 const ok = (msg) => console.log(`  \x1b[32m✓\x1b[0m ${msg}`);
 const info = (msg) => console.log(`  \x1b[36m•\x1b[0m ${msg}`);
@@ -41,19 +43,25 @@ if (!get("ENCRYPTION_KEY")) {
   info("generated ENCRYPTION_KEY");
 }
 if (!get("APP_URL")) set("APP_URL", "http://127.0.0.1:3000");
+if (TEMPLATE_DATABASE_URLS.includes(get("DATABASE_URL"))) {
+  info("DATABASE_URL was the old example value; switched it to the dev database on 127.0.0.1:5433");
+  set("DATABASE_URL", DEV_DATABASE_URL);
+}
 if (!get("DATABASE_URL")) set("DATABASE_URL", DEV_DATABASE_URL);
 writeFileSync(".env", env);
 ok(".env ready");
 
 // 3. Postgres
 const databaseUrl = get("DATABASE_URL");
+let lastError = "";
 async function reachable() {
   const client = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 2000 });
   try {
     await client.connect();
     await client.query("SELECT 1");
     return true;
-  } catch {
+  } catch (err) {
+    lastError = err?.message || err?.code || String(err);
     return false;
   } finally {
     await client.end().catch(() => {});
@@ -64,12 +72,19 @@ if (await reachable()) {
   ok(`Postgres reachable at ${new URL(databaseUrl).host}`);
 } else {
   const usesDevContainer = databaseUrl === DEV_DATABASE_URL;
-  const docker = spawnSync("docker", ["info"], { stdio: "ignore", shell: isWindows });
-  if (!usesDevContainer || docker.status !== 0) {
+  if (!usesDevContainer) {
     fail(
-      usesDevContainer
-        ? "Postgres is not running and Docker is not available.\n    Start Docker Desktop and re-run `pnpm dev:setup`, or point DATABASE_URL in .env to your own Postgres 14+."
-        : `Cannot connect to DATABASE_URL (${new URL(databaseUrl).host}). Is that Postgres running?`,
+      `Cannot connect to DATABASE_URL (${new URL(databaseUrl).host}): ${lastError}\n` +
+        "    • Using your own Postgres? Start it (and check user/password/database), then re-run `pnpm dev:setup`.\n" +
+        `    • Want Spoter's Docker database instead? Set DATABASE_URL=${DEV_DATABASE_URL}\n` +
+        "      in .env (or delete that line) and re-run `pnpm dev:setup`.",
+    );
+  }
+  const docker = spawnSync("docker", ["info"], { stdio: "ignore", shell: isWindows });
+  if (docker.status !== 0) {
+    fail(
+      "Postgres is not running and Docker is not available.\n" +
+        "    Start Docker Desktop and re-run `pnpm dev:setup`, or point DATABASE_URL in .env to your own Postgres 14+.",
     );
   }
   info("starting the dev database container (docker-compose.dev.yml)…");
